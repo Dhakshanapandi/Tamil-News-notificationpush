@@ -2,43 +2,43 @@ name: Run News Feeder (every 30 minutes)
 
 on:
   schedule:
-    # runs roughly every 30 minutes. Using 5,35 avoids the "start of hour" heavy load.
-    - cron: '5,35 * * * *'
-  workflow_dispatch:   # allows manual runs from the Actions UI
+    - cron: "*/30 * * * *"   # every 30 minutes (UTC)
+  workflow_dispatch:         # allow manual runs from Actions tab
 
 jobs:
   run-news:
     runs-on: ubuntu-latest
-    concurrency:
-      group: newsfeeder
-      cancel-in-progress: true
-    timeout-minutes: 25   # safety: cancel if it runs >25 minutes
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Restore Firebase service account (base64 secret)
-        # if you saved FIREBASE_SERVICE_ACCOUNT_B64 as base64; otherwise skip this step
+      # Debug step (to confirm CHANNEL_IDS is set)
+      - name: Debug CHANNEL_IDS
         run: |
-          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}" | base64 --decode > ./serviceAccount.json
+          if [ -z "$CHANNEL_IDS" ]; then
+            echo "❌ CHANNEL_IDS is NOT set!"
+            exit 1
+          fi
+          echo "✅ CHANNEL_IDS secret is set."
+          echo "Length: ${#CHANNEL_IDS}"
+          echo "Preview: ${CHANNEL_IDS:0:15}..."
+        env:
+          CHANNEL_IDS: ${{ secrets.CHANNEL_IDS }}
 
       - name: Run script
         env:
-          # Options:
-          # 1) If your code reads JSON from env: keep FIREBASE_SERVICE_ACCOUNT as a secret and pass it here
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          # 2) If your code reads a file, you wrote it above to ./serviceAccount.json
           YT_API_KEY: ${{ secrets.YT_API_KEY }}
+          CHANNEL_IDS: ${{ secrets.CHANNEL_IDS }}
         run: |
-          # optional: show brief info to logs (secrets are masked automatically)
-          echo "Starting news-feeder at $(date -u)"
+          echo "⏰ Starting news-feeder at $(date -u)"
           node index.js
